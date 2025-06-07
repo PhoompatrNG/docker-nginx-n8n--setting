@@ -1,0 +1,64 @@
+# กำหนด services หรือ containers ที่จะทำงานร่วมกัน
+services:
+  # กำหนด service แรกชื่อ n8n
+  n8n:
+    # ระบุ Docker image ที่จะใช้สำหรับ service นี้ คือ n8nio/n8n (เวอร์ชันล่าสุดโดยปริยาย)
+    image: n8nio/n8n
+    # กำหนดนโยบายการ restart ของ container นี้: ให้ restart เสมอ ยกเว้นเมื่อถูกสั่งหยุด (stopped) โดยผู้ใช้
+    restart: unless-stopped
+    # กำหนด volumes หรือพื้นที่จัดเก็บข้อมูลสำหรับ service นี้
+    volumes:
+      # map (เชื่อม) named volume ชื่อ n8n_data (ที่ถูกจัดการโดย Docker) เข้ากับ path /home/node/.n8n ภายใน container
+      # เพื่อให้ข้อมูลของ n8n ถูกเก็บไว้อย่างถาวร แม้ container จะถูกลบและสร้างใหม่
+      - n8n_data:/home/node/.n8n
+    # กำหนด networks ที่ service นี้จะเชื่อมต่อ
+    networks:
+      # ให้ service นี้เชื่อมต่อกับ network ชื่อ n8n_network
+      - n8n_network
+
+  # กำหนด service ที่สองชื่อ nginx_n8n (ทำหน้าที่เป็น reverse proxy ให้ n8n)
+  nginx_n8n:
+    # ระบุ Docker image ที่จะใช้สำหรับ service นี้ คือ nginx:latest (เวอร์ชันล่าสุดของ Nginx)
+    image: nginx:latest
+    # กำหนดนโยบายการ restart ของ container นี้: ให้ restart เสมอ ยกเว้นเมื่อถูกสั่งหยุดโดยผู้ใช้
+    restart: unless-stopped
+    # กำหนด port mappings ระหว่าง host machine กับ container
+    ports:
+      # map port 80 ของ host machine เข้ากับ port 80 ของ container นี้ (สำหรับ HTTP)
+      - "80:80"  # HTTP
+      # บรรทัดนี้ถูก comment ไว้: หากต้องการใช้ HTTPS (port 443) ให้ uncomment และตั้งค่า SSL เพิ่มเติม
+      # - "443:443" # HTTPS (ยกเลิกคอมเมนต์และกำหนดค่าสำหรับ SSL)
+    # กำหนด volumes หรือพื้นที่จัดเก็บข้อมูลสำหรับ service นี้
+    volumes:
+      # map ไฟล์ nginx.conf จาก path ./nginx/nginx.conf บน host machine
+      # เข้ากับ path /etc/nginx/nginx.conf ภายใน container ในโหมด read-only (ro)
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # map directory ./nginx/conf.d บน host machine
+      # เข้ากับ path /etc/nginx/conf.d ภายใน container ในโหมด read-only (ro)
+      # สำหรับเก็บไฟล์ configuration ของ server blocks เพิ่มเติม
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro # สำหรับ server blocks
+      # บรรทัดเหล่านี้ถูก comment ไว้: สำหรับการจัดการ SSL certificates
+      # หากคุณจัดการ SSL certificates ด้วยตนเอง หรือ mount จาก host
+      # - ./certbot/conf:/etc/letsencrypt
+      # - ./certbot/www:/var/www/certbot
+    # กำหนด dependencies หรือ service ที่ต้องทำงานก่อน service นี้
+    depends_on:
+      # ระบุว่า service nginx_n8n นี้จะเริ่มทำงานหลังจาก service n8n เริ่มทำงานแล้ว
+      - n8n
+    # กำหนด networks ที่ service นี้จะเชื่อมต่อ
+    networks:
+      # ให้ service นี้เชื่อมต่อกับ network ชื่อ n8n_network
+      - n8n_network
+
+# ส่วนนี้ใช้สำหรับประกาศ named volumes ที่ถูกจัดการโดย Docker
+volumes:
+  # ประกาศ named volume ชื่อ n8n_data ซึ่งจะถูกใช้โดย service n8n เพื่อเก็บข้อมูลถาวร
+  n8n_data:
+
+# ส่วนนี้ใช้สำหรับประกาศ custom networks
+networks:
+  # ประกาศ custom network ชื่อ n8n_network
+  n8n_network:
+    # กำหนด driver สำหรับ network นี้เป็น bridge (เป็นค่า default สำหรับ user-defined networks)
+    # bridge network จะสร้าง private internal network สำหรับ containers ที่เชื่อมต่ออยู่
+    driver: bridge
